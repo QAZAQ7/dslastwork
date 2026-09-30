@@ -53,3 +53,6 @@ Do not delete the employee rows. Telegram links can be preserved or relinked thr
 8. Verify cumulative Test 2 totals: Project A €2,050, Project B €2,180, Company €3,930; commissions €140 / €175 / €215.
 9. Run the permission, duplicate-reference, zero-amount, invalid-split, idempotent-approval, Sheets retry and Telegram notification retry checks.
 10. Submit the production Vercel URL only after all checks pass.
+
+
+> Vercel Supabase resource connected for production verification.
