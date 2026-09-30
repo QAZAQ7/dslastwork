@@ -60,3 +60,9 @@ create table if not exists expenses (
 
 create index if not exists idx_sales_status on sales(status);
 create index if not exists idx_expenses_status on expenses(status);
+
+
+-- Server-only data access: the app uses the Supabase secret key in Vercel API routes.
+alter table public.employees enable row level security;
+alter table public.sales enable row level security;
+alter table public.expenses enable row level security;
