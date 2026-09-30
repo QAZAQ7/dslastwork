@@ -120,8 +120,26 @@ export async function approveExpense(actor: EmployeeCode, reference: string, fin
 
 export async function linkTelegram(actor: EmployeeCode, employeeCode: EmployeeCode, userId: number, chatId: number) {
   await requireRole(actor, ["manager"]);
-  const { error } = await getSupabase().from("employees").update({ telegram_user_id:userId, telegram_chat_id:chatId }).eq("code", employeeCode);
-  if (error) throw new Error(error.message);
+  if (!Number.isFinite(userId) || !Number.isFinite(chatId)) throw new Error("Valid Telegram user ID and chat ID are required.");
+  const db = getSupabase();
+
+  // The official test deliberately relinks the same Telegram account from Richard to Kevin.
+  // Clear that live account link from any other employee first. Historical transactions keep
+  // their stored salesperson/reporter code and original_telegram_chat_id unchanged.
+  const { error: clearError } = await db
+    .from("employees")
+    .update({ telegram_user_id: null, telegram_chat_id: null })
+    .eq("telegram_user_id", userId)
+    .neq("code", employeeCode);
+  if (clearError) throw new Error(clearError.message);
+
+  const { data, error } = await db
+    .from("employees")
+    .update({ telegram_user_id:userId, telegram_chat_id:chatId })
+    .eq("code", employeeCode)
+    .select("code")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Employee not found.");
 }
 
 export async function getDashboard(actor?: EmployeeCode) {
