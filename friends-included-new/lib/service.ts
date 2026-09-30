@@ -20,16 +20,28 @@ async function markSheet(kind: "sale" | "expense", id: string, status: "ok" | "f
   await getSupabase().from(kind === "sale" ? "sales" : "expenses").update({ sheet_sync_status: status }).eq("id", id);
 }
 
-export async function syncRecord(kind: "sale" | "expense", row: any) {
+function safeSheetError(error: any): string {
+  const google = error?.response?.data?.error;
+  if (google?.message) return String(google.message).slice(0, 500);
+  if (error?.message) return String(error.message).slice(0, 500);
+  return "Unknown Google Sheets error.";
+}
+
+export async function syncRecordDetailed(kind: "sale" | "expense", row: any) {
   try {
     if (kind === "sale") await syncSale(row); else await syncExpense(row);
     await markSheet(kind, row.id, "ok");
-    return "ok" as const;
+    return { status: "ok" as const };
   } catch (error: any) {
+    const detail = safeSheetError(error);
     console.error("SHEETS_SYNC_ERROR", error?.response?.data ?? error?.message ?? error);
     await markSheet(kind, row.id, "failed");
-    return "failed" as const;
+    return { status: "failed" as const, error: detail };
   }
+}
+
+export async function syncRecord(kind: "sale" | "expense", row: any) {
+  return (await syncRecordDetailed(kind, row)).status;
 }
 
 export async function createSale(input: { actor: EmployeeCode; reference: string; customer: string; project: ProjectCode; description: string; amount: unknown; split: Split; originalChatId?: number | null }) {
@@ -72,7 +84,7 @@ async function notifySale(row: any) {
     return "no_recipient" as const;
   }
   const changed = Number(row.approved_richard) !== Number(row.proposed_richard) || Number(row.approved_anastasia) !== Number(row.proposed_anastasia) || Number(row.approved_jean) !== Number(row.proposed_jean);
-  const text = `Sale ${row.reference} approved${changed ? " — commission split changed" : ""}. Sale €${Number(row.amount).toFixed(2)}; total commission €${Number(row.commission_pool).toFixed(2)}. Richard: ${row.approved_richard}% (€${Number(row.commission_richard).toFixed(2)}). Anastasia: ${row.approved_anastasia}% (€${Number(row.commission_anastasia).toFixed(2)}). Jean-Claude: ${row.approved_jean}% (€${Number(row.commission_jean).toFixed(2)}).`;
+  const text = `Sale ${row.reference} approved${changed ? " — commission split changed" : ""}. Sale €${Number(row.amount).toFixed(2)}; total commission €${Number(row.commission_pool).toFixed(2)}. Richard: ${row.proposed_richard}% → ${row.approved_richard}% (€${Number(row.commission_richard).toFixed(2)}). Anastasia: ${row.proposed_anastasia}% → ${row.approved_anastasia}% (€${Number(row.commission_anastasia).toFixed(2)}). Jean-Claude: ${row.proposed_jean}% → ${row.approved_jean}% (€${Number(row.commission_jean).toFixed(2)}).`;
   try { await sendTelegram(row.original_telegram_chat_id, text); await db.from("sales").update({notification_status:"sent"}).eq("id",row.id); return "sent" as const; }
   catch { await db.from("sales").update({notification_status:"failed"}).eq("id",row.id); return "failed" as const; }
 }
@@ -84,9 +96,22 @@ async function notifyExpense(row: any) {
     return "no_recipient" as const;
   }
   const changed = row.final_allocation !== row.proposed_allocation;
-  const text = `Expense ${row.reference} — allocation ${changed ? "changed" : "confirmed"}. €${Number(row.amount).toFixed(2)}: ${row.description}. Final allocation: ${row.final_allocation}.`;
+  const text = `Expense ${row.reference} — allocation ${changed ? "changed" : "confirmed"}. €${Number(row.amount).toFixed(2)}: ${row.description}. Proposed: ${row.proposed_allocation}. Approved: ${row.final_allocation}.`;
   try { await sendTelegram(row.original_telegram_chat_id, text); await db.from("expenses").update({notification_status:"sent"}).eq("id",row.id); return "sent" as const; }
   catch { await db.from("expenses").update({notification_status:"failed"}).eq("id",row.id); return "failed" as const; }
+}
+
+export async function retryNotification(actor: EmployeeCode, kind: "sale" | "expense", reference: string) {
+  await requireRole(actor, ["manager"]);
+  const db = getSupabase();
+  if (kind === "sale") {
+    const { data, error } = await db.from("sales").select("*").eq("reference", reference).single();
+    if (error || !data || data.status !== "Approved") throw new Error("Approved sale not found.");
+    return notifySale(data);
+  }
+  const { data, error } = await db.from("expenses").select("*").eq("reference", reference).single();
+  if (error || !data || data.status !== "Allocated") throw new Error("Allocated expense not found.");
+  return notifyExpense(data);
 }
 
 export async function approveSale(actor: EmployeeCode, reference: string, split: Split) {
