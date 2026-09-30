@@ -28,3 +28,28 @@ New standalone project for the Day 4 homework. It connects Telegram, Supabase, V
 
 ## Security
 Never commit service-role keys, Telegram tokens, or Google private keys. If an old Google service-account key was previously exposed, revoke it and replace it after the integration works.
+
+
+## Safe one-time cleanup before official Test 1
+
+Run only this SQL in the new Supabase project's SQL Editor:
+
+```sql
+delete from sales;
+delete from expenses;
+```
+
+Do not delete the employee rows. Telegram links can be preserved or relinked through the manager UI.
+
+## Official verification order
+
+1. Confirm production deployment is READY.
+2. Confirm Supabase tables exist and the website persists records after refresh.
+3. Confirm `/api/google-health` returns `ok: true` and shows exactly the `Sales` and `Expenses` tabs.
+4. Confirm Telegram webhook points to `/api/telegram`.
+5. Run Test 1 exactly as specified, including S01 and E01 through the real Telegram bot.
+6. Verify Test 1 totals: Project A €700, Project B €1,800, Company €2,400; commissions €90 / €110 / €100.
+7. Keep Test 1 data and run Test 2.
+8. Verify cumulative Test 2 totals: Project A €2,050, Project B €2,180, Company €3,930; commissions €140 / €175 / €215.
+9. Run the permission, duplicate-reference, zero-amount, invalid-split, idempotent-approval, Sheets retry and Telegram notification retry checks.
+10. Submit the production Vercel URL only after all checks pass.
