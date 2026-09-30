@@ -7,7 +7,7 @@ export default async function handler(req:NextApiRequest,res:NextApiResponse){
 
   const result:any={
     ok:true,
-    supabase:{configured:Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),reachable:false},
+    supabase:{configured:Boolean((process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL)&&(process.env.SUPABASE_SECRET_KEY||process.env.SUPABASE_SERVICE_ROLE_KEY)),reachable:false},
     googleSheets:{configured:Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL&&process.env.GOOGLE_PRIVATE_KEY&&process.env.GOOGLE_SHEETS_ID),reachable:false},
     telegram:{configured:Boolean(process.env.TELEGRAM_BOT_TOKEN&&process.env.TELEGRAM_WEBHOOK_SECRET)},
   };
