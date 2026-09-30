@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { approveExpense, approveSale, createExpense, createSale, getDashboard, linkTelegram, syncRecord } from "../../lib/service";
+import { approveExpense, approveSale, createExpense, createSale, getDashboard, linkTelegram, retryNotification, syncRecordDetailed } from "../../lib/service";
 import { getSupabase } from "../../lib/supabase";
 import type { EmployeeCode } from "../../lib/types";
 
@@ -20,7 +20,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if(b.actor!=="svetlana") throw new Error("Permission denied.");
       const table=b.kind==="sale"?"sales":b.kind==="expense"?"expenses":null; if(!table) throw new Error("Invalid sync kind.");
       const {data,error}=await getSupabase().from(table).select("*").eq("reference",b.reference).single(); if(error||!data) throw new Error("Record not found.");
-      const status=await syncRecord(b.kind,data); return res.status(200).json({ok:status==="ok",sheet_sync_status:status});
+      const result=await syncRecordDetailed(b.kind,data); return res.status(200).json({ok:result.status==="ok",sheet_sync_status:result.status,error:result.error??null});
+    }
+    if(b.action==="retryNotification"){
+      if(b.kind!=="sale" && b.kind!=="expense") throw new Error("Invalid notification kind.");
+      const status=await retryNotification(b.actor,b.kind,b.reference);
+      return res.status(200).json({ok:status==="sent",notification_status:status});
     }
     return res.status(400).json({ok:false,error:"Unknown action"});
   } catch (error:any) { return res.status(400).json({ok:false,error:error?.message??"Unknown error"}); }
