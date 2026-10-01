@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { approveExpense, approveSale, createExpense, createSale, getDashboard, linkTelegram, retryNotification, syncRecordDetailed } from "../../lib/service";
+import { approveExpense, approveSale, createExpense, createSale, getDashboard, linkTelegram, unlinkTelegram, retryNotification, syncRecordDetailed } from "../../lib/service";
 import { getSupabase } from "../../lib/supabase";
 import type { EmployeeCode } from "../../lib/types";
 
@@ -16,6 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if(b.action==="approveSale"){ const result=await approveSale(b.actor,b.reference,{richard:Number(b.approved_richard),anastasia:Number(b.approved_anastasia),jean:Number(b.approved_jean)}); return res.status(200).json({ok:true,...result}); }
     if(b.action==="approveExpense"){ const result=await approveExpense(b.actor,b.reference,b.final_allocation); return res.status(200).json({ok:true,...result}); }
     if(b.action==="linkTelegram"){ await linkTelegram(b.actor,b.employee_code,Number(b.telegram_user_id),Number(b.telegram_chat_id)); return res.status(200).json({ok:true}); }
+    if(b.action==="unlinkTelegram"){ const result=await unlinkTelegram(b.actor,b.employee_code,Number(b.telegram_user_id)); return res.status(200).json({ok:true,...result}); }
     if(b.action==="retrySync"){
       if(b.actor!=="svetlana") throw new Error("Permission denied.");
       const table=b.kind==="sale"?"sales":b.kind==="expense"?"expenses":null; if(!table) throw new Error("Invalid sync kind.");
