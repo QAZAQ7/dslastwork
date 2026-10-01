@@ -212,5 +212,14 @@ export async function getDashboard(actor?: EmployeeCode) {
       visibleSales=[]; visibleExpenses=[]; pendingSales=[]; awaitingExpenses=[];
     }
   }
-  return { projectA:project("A"), projectB:project("B"), company:{ overhead:money(ex.filter((e:any)=>e.status==="Allocated"&&e.final_allocation==="Company overhead").reduce((t:number,e:any)=>t+Number(e.amount),0)), awaiting:money(ex.filter((e:any)=>e.status==="Awaiting allocation").reduce((t:number,e:any)=>t+Number(e.amount),0)), result:money(income-commission-allExpenses) }, commissions:{ richard:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_richard||0),0)), anastasia:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_anastasia||0),0)), jean:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_jean||0),0)) }, pendingSales, awaitingExpenses, visibleSales, visibleExpenses };
+  const emp = actor ? await employee(actor) : null;
+  const managerView = !actor || emp?.role === "manager";
+
+  // Full company/team aggregates are manager-only. Employee responses contain only
+  // records the selected role is permitted to receive, including its own open items.
+  if (!managerView) {
+    return { view: "employee", pendingSales, awaitingExpenses, visibleSales, visibleExpenses };
+  }
+
+  return { view: "manager", projectA:project("A"), projectB:project("B"), company:{ overhead:money(ex.filter((e:any)=>e.status==="Allocated"&&e.final_allocation==="Company overhead").reduce((t:number,e:any)=>t+Number(e.amount),0)), awaiting:money(ex.filter((e:any)=>e.status==="Awaiting allocation").reduce((t:number,e:any)=>t+Number(e.amount),0)), result:money(income-commission-allExpenses) }, commissions:{ richard:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_richard||0),0)), anastasia:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_anastasia||0),0)), jean:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_jean||0),0)) }, pendingSales, awaitingExpenses, visibleSales, visibleExpenses };
 }
