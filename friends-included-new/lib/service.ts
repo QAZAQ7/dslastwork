@@ -167,6 +167,22 @@ export async function linkTelegram(actor: EmployeeCode, employeeCode: EmployeeCo
   if (error || !data) throw new Error(error?.message ?? "Employee not found.");
 }
 
+export async function unlinkTelegram(actor: EmployeeCode, employeeCode: EmployeeCode, expectedUserId: number) {
+  await requireRole(actor, ["manager"]);
+  if (!Number.isFinite(expectedUserId)) throw new Error("Valid Telegram user ID is required to remove a test binding.");
+  const db = getSupabase();
+  const { data, error } = await db
+    .from("employees")
+    .update({ telegram_user_id: null, telegram_chat_id: null })
+    .eq("code", employeeCode)
+    .eq("telegram_user_id", expectedUserId)
+    .select("code")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Binding not found or changed. Nothing was removed.");
+  return { employee_code: data.code };
+}
+
 export async function getDashboard(actor?: EmployeeCode) {
   const db = getSupabase();
   const [{data:sales,error:salesError},{data:expenses,error:expenseError}] = await Promise.all([
@@ -179,7 +195,22 @@ export async function getDashboard(actor?: EmployeeCode) {
   const approved=ss.filter((s:any)=>s.status==="Approved");
   const project=(p:string)=>{ const ps=approved.filter((s:any)=>s.project===p); const income=ps.reduce((t:number,s:any)=>t+Number(s.amount),0); const commission=ps.reduce((t:number,s:any)=>t+Number(s.commission_pool||0),0); const allocated=ex.filter((e:any)=>e.status==="Allocated"&&e.final_allocation===p).reduce((t:number,e:any)=>t+Number(e.amount),0); return {income:money(income),commission:money(commission),allocated:money(allocated),result:money(income-commission-allocated)}; };
   const income=approved.reduce((t:number,s:any)=>t+Number(s.amount),0); const commission=approved.reduce((t:number,s:any)=>t+Number(s.commission_pool||0),0); const allExpenses=ex.reduce((t:number,e:any)=>t+Number(e.amount),0);
-  let visibleSales=ss, visibleExpenses=ex;
-  if(actor){ const emp=await employee(actor); if(emp.role==="salesperson"){visibleSales=ss.filter((s:any)=>s.salesperson_code===actor); visibleExpenses=[];} if(emp.role==="expense_reporter"){visibleSales=[]; visibleExpenses=ex.filter((e:any)=>e.reporter_code===actor);} }
-  return { projectA:project("A"), projectB:project("B"), company:{ overhead:money(ex.filter((e:any)=>e.status==="Allocated"&&e.final_allocation==="Company overhead").reduce((t:number,e:any)=>t+Number(e.amount),0)), awaiting:money(ex.filter((e:any)=>e.status==="Awaiting allocation").reduce((t:number,e:any)=>t+Number(e.amount),0)), result:money(income-commission-allExpenses) }, commissions:{ richard:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_richard||0),0)), anastasia:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_anastasia||0),0)), jean:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_jean||0),0)) }, pendingSales:ss.filter((s:any)=>s.status==="Pending approval"), awaitingExpenses:ex.filter((e:any)=>e.status==="Awaiting allocation"), visibleSales, visibleExpenses };
+  let visibleSales:any[]=ss, visibleExpenses:any[]=ex, pendingSales:any[]=ss.filter((s:any)=>s.status==="Pending approval"), awaitingExpenses:any[]=ex.filter((e:any)=>e.status==="Awaiting allocation");
+  if(actor){
+    const emp=await employee(actor);
+    if(emp.role==="salesperson"){
+      visibleSales=ss.filter((s:any)=>s.salesperson_code===actor);
+      visibleExpenses=[];
+      pendingSales=visibleSales.filter((s:any)=>s.status==="Pending approval");
+      awaitingExpenses=[];
+    } else if(emp.role==="expense_reporter"){
+      visibleSales=[];
+      visibleExpenses=ex.filter((e:any)=>e.reporter_code===actor);
+      pendingSales=[];
+      awaitingExpenses=visibleExpenses.filter((e:any)=>e.status==="Awaiting allocation");
+    } else if(emp.role!=="manager"){
+      visibleSales=[]; visibleExpenses=[]; pendingSales=[]; awaitingExpenses=[];
+    }
+  }
+  return { projectA:project("A"), projectB:project("B"), company:{ overhead:money(ex.filter((e:any)=>e.status==="Allocated"&&e.final_allocation==="Company overhead").reduce((t:number,e:any)=>t+Number(e.amount),0)), awaiting:money(ex.filter((e:any)=>e.status==="Awaiting allocation").reduce((t:number,e:any)=>t+Number(e.amount),0)), result:money(income-commission-allExpenses) }, commissions:{ richard:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_richard||0),0)), anastasia:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_anastasia||0),0)), jean:money(approved.reduce((t:number,s:any)=>t+Number(s.commission_jean||0),0)) }, pendingSales, awaitingExpenses, visibleSales, visibleExpenses };
 }
